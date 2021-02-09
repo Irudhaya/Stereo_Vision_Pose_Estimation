@@ -40,7 +40,7 @@
 	</link>
 
 	<joint name="stereo_base_camera_attachment" type="fixed">
-		<origin xyz="0 0 0.425" rpy="0 0 0"/>
+		<origin xyz="0.225 0 0.425" rpy="0 0 0"/>
 		<parent link="stereo_base_link"/>
 		<child link="stereo_camera_attachment"/>
 	</joint>
