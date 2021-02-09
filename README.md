@@ -1,0 +1,1 @@
+Repository contains the nexessary files developed during the project of Pose estimation of objects using Stereo Vision.
