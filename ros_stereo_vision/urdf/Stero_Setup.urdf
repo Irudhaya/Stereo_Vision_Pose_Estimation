@@ -1,5 +1,76 @@
 <robot name="stereo_robot">
-	<link name="stereo_base_link">
+
+	<gazebo reference="stereo_left_camera">
+    <sensor type="multicamera" name="stereo_camera">
+      <update_rate>30.0</update_rate>
+      <camera name="left">
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>800</width>
+          <height>800</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>300</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+      <camera name="right">
+        <pose>0 -0.07 0 0 0 0</pose>
+        <horizontal_fov>1.3962634</horizontal_fov>
+        <image>
+          <width>800</width>
+          <height>800</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.02</near>
+          <far>300</far>
+        </clip>
+        <noise>
+          <type>gaussian</type>
+          <mean>0.0</mean>
+          <stddev>0.007</stddev>
+        </noise>
+      </camera>
+      <plugin name="stereo_camera_controller" filename="libgazebo_ros_multicamera.so">
+        <alwaysOn>true</alwaysOn>
+        <updateRate>0.0</updateRate>
+        <cameraName>multisense_sl/camera</cameraName>
+        <imageTopicName>image_raw</imageTopicName>
+        <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+        <frameName>left_camera_optical_frame</frameName>
+        <rightFrameName>right_camera_optical_frame</rightFrameName>
+        <hackBaseline>0.07</hackBaseline>
+        <distortionK1>0.0</distortionK1>
+        <distortionK2>0.0</distortionK2>
+        <distortionK3>0.0</distortionK3>
+        <distortionT1>0.0</distortionT1>
+        <distortionT2>0.0</distortionT2>
+      </plugin>
+    </sensor>
+  </gazebo>
+	
+	<link name="stereo_base"/>
+
+<gazebo reference="stereo_main_base_link">
+    <material>Gazebo/Orange</material>
+  </gazebo>
+  
+  <gazebo reference="stereo_camera_attachment">
+    <material>Gazebo/Black</material>
+  </gazebo>
+
+   <gazebo reference="stereo_camera">
+    <material>Gazebo/White</material>
+  </gazebo>
+
+	<link name="stereo_vertical_link">
 		<visual>
 			<origin xyz="0 0 0" rpy="0 0 0"/>
 			<geometry>
@@ -19,9 +90,15 @@
 		</inertial>
 	</link>
 
-	<link name="stereo_camera_attachment">
+	<joint name="stereo_base_vertical" type="fixed">
+		<origin xyz="0.0 0.0 0.4" rpy="0 0 0"/>
+		<parent link="stereo_base"/>
+		<child link="stereo_vertical_link"/>
+	</joint>
+
+	<link name="stereo_horizontal_link">
 		<visual>
-			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<origin xyz="0.225 0 0" rpy="0 0 0"/>
 			<geometry>
 				<box size="0.5 0.05 0.05"/>
 			</geometry>
@@ -40,9 +117,42 @@
 	</link>
 
 	<joint name="stereo_base_camera_attachment" type="fixed">
-		<origin xyz="0.225 0 0.425" rpy="0 0 0"/>
-		<parent link="stereo_base_link"/>
-		<child link="stereo_camera_attachment"/>
+		<origin xyz="0.0 0.0 0.425" rpy="0 0 0"/>
+		<parent link="stereo_vertical_link"/>
+		<child link="stereo_horizontal_link"/>
+	</joint>
+
+	<link name="stereo_camera">
+		<visual>
+			<origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+			<geometry>
+				<box size="0.025 0.1 0.025"/>
+			</geometry>
+		</visual>
+		<collision>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<geometry>
+				<box size="0.025 0.1 0.025"/>
+			</geometry>
+		</collision>
+		<inertial>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<mass value="0.5"/>
+			<inertia ixx="0.0008333333333333335" ixy="0.0" ixz="0.0" iyy="0.042083333333333334" iyz="0.0" izz="0.042083333333333334" />
+		</inertial>
+	</link>
+	<joint name="stereo_camera_camera_attachment" type="fixed">
+		<origin xyz="0.4625 0.0 -0.0375" rpy="0 -0.2617 0"/>
+		<parent link="stereo_horizontal_link"/>
+		<child link="stereo_camera"/>
+	</joint>
+	
+	<link name="stereo_left_camera"/>
+
+	<joint name="stereo_left_camera_frame" type="fixed">
+		<origin xyz="0.0 0.035 0.0" rpy="0 1.57 0"/>
+		<parent link="stereo_camera"/>
+		<child link="stereo_left_camera"/>
 	</joint>
 
 </robot>
