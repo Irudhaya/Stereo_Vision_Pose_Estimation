@@ -9,6 +9,7 @@ from geometry_msgs.msg import Point
 import numpy as np
 from visualization_msgs.msg import Marker
 from tf.transformations import euler_matrix
+import math
 #import pcl
 import time
 import struct
@@ -59,7 +60,7 @@ def point_cloud_object(point_cloud):
 	global cloud
 
 	cloud = point_cloud
-	
+
 
 def x_y_z_from_pcd(u,v):
 	point_step = cloud.point_step
@@ -91,17 +92,42 @@ def publish_rotated_pcd(points):
 
 	for point in points:
 		#projecting points from opencv_camera frame to stereo_camera frame
-		point_stereo_camera = np.matmul(tf_opencv_camera_stereo_camera,np.array(point.append(1)))
+		#print("Point", point, len(point))
+		point = np.reshape(np.array(point), (-1,1))
+		#print("reshape point", point)
+		point_stereo_camera = np.matmul(tf_opencv_camera_stereo_camera,point)
 		pose.x = point_stereo_camera[0]
-		pose.x = point_stereo_camera[1]
-		pose.x = point_stereo_camera[2]
+		pose.y = point_stereo_camera[1]
+		pose.z = point_stereo_camera[2]
 
 		stereo_points.append(pose)
 
+	marker_points = Marker()
 
+	marker_points.header.frame_id = "stereo_left_camera"
+	marker_points.header.stamp = rospy.Time.now()
+	marker_points.header.seq = 1
+	
+	marker_points.ns = "actual_pcd"
+	marker_points.id = 8
+	marker_points.type = marker_points.POINTS
+	marker_points.action = marker_points.ADD
+	
+	marker_points.pose.orientation.w = 1.0
+	
+	marker_points.scale.x = 0.01
+	marker_points.scale.y = 0.01
+	marker_points.scale.z = 0.01
+	
+	marker_points.color.r = 1.0
+	marker_points.color.g = 1.0
+	marker_points.color.b = 0.0
+	marker_points.color.a = 1.0
 
-
-
+	marker_points.points = stereo_points
+	print("All points are transformed and published to visulaize in RVIZ")
+	pub_marker.publish(marker_points)
+	
 
 def filter(image):
 	#red color objects with HSV color space
@@ -149,18 +175,19 @@ def detect_objects_mask(left_image):
 	#print(area_centroid)
 
 	for cnt in area_centroid:
-		print("Length of the contours: {}".format(len(contours[cnt.get("contour")])))
-		print(contours[cnt.get("contour")].shape)
+		#print("Length of the contours: {}".format(len(contours[cnt.get("contour")])))
+		#print(contours[cnt.get("contour")].shape)
 		
 		contour_points = len(contours[cnt.get("contour")])
 
 		points_xyz=[]
 		for point in contours[cnt.get("contour")]:
 			u,v = point[0][0], point[0][1]
-			print("U: {}  V: {}".format(u,v))
+			#print("U: {}  V: {}".format(u,v))
 			x,y,z = x_y_z_from_pcd(u,v)
-			if np.any(np.array([x,y,z])):
-				points_xyz.append([x,y,z])
+			if not(math.isnan(x) or math.isnan(y) or math.isnan(z)):
+				print("Checked for nan and appending")
+				points_xyz.append([x,y,z,1])
 
 
 		# print(contours[int(contour_points/2)][0][0])
@@ -299,12 +326,16 @@ def undistort_rectify_image():
 
 #function that initates the subscription of topics
 def image_proc():
+	global pub_marker
+
 	left_cam = rospy.Subscriber("/stereo/left/camera_info", CameraInfo, callback=left_camera_properties)
 	right_cam = rospy.Subscriber("/stereo/right/camera_info", CameraInfo, callback=right_camera_properties)
 	left_image = rospy.Subscriber("/stereo/left/image_raw", Image, callback=left_image_raw)
 	right_image = rospy.Subscriber("/stereo/right/image_raw", Image, callback=right_image_raw)
 
 	pcd_3d = rospy.Subscriber("/stereo/points2",PointCloud2,point_cloud_object)
+
+	pub_marker = rospy.Publisher("/stereo/actual_pcd",Marker,queue_size=1)
 
 def main():
 	
@@ -318,6 +349,7 @@ def main():
 	
 	while not rospy.is_shutdown():
 		object_3d_points = detect_objects_mask(left_image)
+		#print("Length of detected points: {}".format(len(object_3d_points)))
 		if len(object_3d_points) > 0:
 			publish_rotated_pcd(object_3d_points)
 		# u,v = detect_objects_mask(left_image)
