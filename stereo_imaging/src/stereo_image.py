@@ -115,9 +115,9 @@ def publish_rotated_pcd(points):
 	
 	marker_points.pose.orientation.w = 1.0
 	
-	marker_points.scale.x = 0.01
-	marker_points.scale.y = 0.01
-	marker_points.scale.z = 0.01
+	marker_points.scale.x = 0.05
+	marker_points.scale.y = 0.05
+	marker_points.scale.z = 0.05
 	
 	marker_points.color.r = 1.0
 	marker_points.color.g = 1.0
