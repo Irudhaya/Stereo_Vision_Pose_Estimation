@@ -1,0 +1,3 @@
+<launch>
+	<node name="stereo_imaging" type="stereo_image.py" pkg="stereo_imaging" respawn="false" output="screen"/>
+</launch>
