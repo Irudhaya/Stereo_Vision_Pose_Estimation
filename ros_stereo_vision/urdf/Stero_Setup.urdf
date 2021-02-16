@@ -41,11 +41,11 @@
       <plugin name="stereo_camera_controller" filename="libgazebo_ros_multicamera.so">
         <alwaysOn>true</alwaysOn>
         <updateRate>0.0</updateRate>
-        <cameraName>multisense_sl/camera</cameraName>
+        <cameraName>stereo</cameraName>
         <imageTopicName>image_raw</imageTopicName>
         <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-        <frameName>left_camera_optical_frame</frameName>
-        <rightFrameName>right_camera_optical_frame</rightFrameName>
+        <frameName>stereo_left_camera</frameName>
+        <!--rightFrameName>right_camera_optical_frame</rightFrameName-->
         <hackBaseline>0.07</hackBaseline>
         <distortionK1>0.0</distortionK1>
         <distortionK2>0.0</distortionK2>
@@ -58,18 +58,18 @@
 	
 	<link name="stereo_base"/>
 
-<gazebo reference="stereo_main_base_link">
+<gazebo reference="stereo_vertical_link">
     <material>Gazebo/Orange</material>
   </gazebo>
   
-  <gazebo reference="stereo_camera_attachment">
+  <gazebo reference="stereo_camera">
     <material>Gazebo/Black</material>
   </gazebo>
 
-   <gazebo reference="stereo_camera">
+<!--    <gazebo reference="stereo_camera">
     <material>Gazebo/White</material>
   </gazebo>
-
+ -->
 	<link name="stereo_vertical_link">
 		<visual>
 			<origin xyz="0 0 0" rpy="0 0 0"/>
@@ -96,7 +96,7 @@
 		<child link="stereo_vertical_link"/>
 	</joint>
 
-	<link name="stereo_horizontal_link">
+	<!-- <link name="stereo_horizontal_link">
 		<visual>
 			<origin xyz="0.225 0 0" rpy="0 0 0"/>
 			<geometry>
@@ -120,7 +120,7 @@
 		<origin xyz="0.0 0.0 0.425" rpy="0 0 0"/>
 		<parent link="stereo_vertical_link"/>
 		<child link="stereo_horizontal_link"/>
-	</joint>
+	</joint> -->
 
 	<link name="stereo_camera">
 		<visual>
@@ -142,15 +142,15 @@
 		</inertial>
 	</link>
 	<joint name="stereo_camera_camera_attachment" type="fixed">
-		<origin xyz="0.4625 0.0 -0.0375" rpy="0 -0.2617 0"/>
-		<parent link="stereo_horizontal_link"/>
+		<origin xyz="0.0375 0.0 0.4" rpy="0 0 0"/>
+		<parent link="stereo_vertical_link"/>
 		<child link="stereo_camera"/>
 	</joint>
 	
 	<link name="stereo_left_camera"/>
 
 	<joint name="stereo_left_camera_frame" type="fixed">
-		<origin xyz="0.0 0.035 0.0" rpy="0 1.57 0"/>
+		<origin xyz="0.0 0.035 0.0" rpy="0 0 0"/>
 		<parent link="stereo_camera"/>
 		<child link="stereo_left_camera"/>
 	</joint>

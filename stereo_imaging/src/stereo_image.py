@@ -7,7 +7,8 @@ from sensor_msgs.msg import Image,CameraInfo,PointCloud2
 from geometry_msgs.msg import Point,Pose
 import numpy as np
 from visualization_msgs.msg import Marker
-from tf.transformations import euler_matrix
+from tf.transformations import euler_matrix, euler_from_quaternion, quaternion_from_euler, quaternion_from_matrix
+import tf
 import math
 import time
 import struct
@@ -57,77 +58,108 @@ def point_cloud_object(point_cloud):
 def publish_object_pose_tf_rviz(object_points,image_points,frame_names):
 
 	for points3D, points2D, name in zip(object_points,image_points,frame_names):
-		rospy.loginfo("No. of object points: %d",len(points3D))
-		rospy.loginfo("No. of image points: %d",len(points2D))
-		rospy.loginfo("object names: %s",name)
-		pose = compute_object_pose(np.array(points3D, dtype="float32"),np.array(points2D,dtype="double"))
+		
+		assert len(points3D)==len(points2D), "object points and image points should be of same length"
+		
+		#sample 21 points
+		if len(points3D) >=21:
+			sample_points_indexes = np.random.choice(len(points3D),21,replace=False)
+			points3D_sampled = np.array([points3D[i] for i in sample_points_indexes],dtype="float32")
+			points3D_sampled_tf = np.array([points3D[i] - points3D[len(points3D)//2] for i in sample_points_indexes])
+			points2D_sampled = np.array([points2D[i] for i in sample_points_indexes],dtype="double")
+		else:
+			rospy.loginfo("No enough points for the pose computation...")
+			return
+		
+		pose, success = compute_object_pose(points3D_sampled_tf,points2D_sampled,name)
+
+		if success:
+			transformer = tf.TransformBroadcaster()
+			transformer.sendTransform(pose.position, pose.orientation,rospy.Time(),name,"/stereo_base")
 
 
-def compute_object_pose(object_points, image_points):
+
+
+def compute_object_pose(object_points, image_points,object_name):
 
 	pose = Pose()
 
-	success,rotation,translation,inliers = cv2.solvePnPRansac(object_points, image_points,
-																left_K, left_D, flags=cv2.SOLVEPNP_ITERATIVE)
+	success,rotation,translation = cv2.solvePnP(object_points, image_points,
+		left_K, left_D, flags=cv2.SOLVEPNP_ITERATIVE)
 
+	#Model pose w.r.t opencv camera frame if available
 	if success:
-		print("Camera rotation vector w.r.t model: {}".format(rotation))
-		print("Camera translation vector w.r.t model: {}".format(translation))
+
+		euler_angle = rotation.reshape(-1)
+		object_pose = euler_matrix(euler_angle[0],euler_angle[1],euler_angle[2],axes="sxyz")
+		object_pose[:3,3] = translation.reshape(-1)
 
 
-	return pose
+		tf_opencv_camera_stereo_camera = euler_matrix(-1.5707963,0.0,-1.5707963)
+		
+		#from opencv camera frame to the gazebo camera frame (because x-axis is out of the camera in gazebo 
+		#while z-axis in opencv camera)
+		pose_gazebo = np.matmul(tf_opencv_camera_stereo_camera,object_pose)
 
+		#pose of the object w.r.t global frame (location in world)
+		pose_world_translation, pose_world_rotation = object_pose_world(pose_gazebo)
 
-def publish_marker(points,name):
+		print("Pose of the object in the world: \n Object name: {}".format(object_name))
+		print("Rotation: ")
+		print(euler_from_quaternion(pose_world_rotation))
+		print("Translation: ")
+		print(pose_world_translation)
 
-	#transformation from stereo camera to opencv camera
-	tf_opencv_camera_stereo_camera = euler_matrix(-1.5707963,0.0,-1.5707963)
+		pose.position = pose_world_translation
+		pose.orientation = pose_world_rotation
 
-	pose = Point()
-	stereo_points = list()
+		#############Test for the projection of object points to image points###############		
 
-	for point in points:
-		#projecting points from opencv_camera frame to stereo_camera frame
-		point = np.reshape(np.array(point), (-1,1))
+		# ext = np.delete(object_pose,3,0)
+		# print(ext.shape)
+		# print(ext)
+		# point3D = np.append(object_points[5],1).reshape((-1,1)) #choosing a random point from the samples or any other
+																# point whose image co-ords are known
+		# print(point3D)
+		# image = np.matmul(left_K, np.matmul(ext,point3D)) #assuming no distortion in the lens
 
-		point_stereo_camera = np.matmul(tf_opencv_camera_stereo_camera,point)
-		pose.x = point_stereo_camera[0]
-		pose.y = point_stereo_camera[1]
-		pose.z = point_stereo_camera[2]
+		# print(image)
 
-		stereo_points.append(pose)
+		# image = np.array([int(image[0]/image[2]),int(image[1]/image[2])]) #converting homogeneous image coords to pixel coords
 
+		# print("Estimated",image)
+		# print("Actual",image_points[5])
+		# print(image == image_points[5])
 
-	marker_points = Marker()
+		#True indicates that the model pose computed with solvePnP is a good approximate to the object pose
 
-	marker_points.header.frame_id = "stereo_left_camera"
-	marker_points.header.stamp = rospy.Time.now()
-	marker_points.header.seq = 1
+		#####################################################################################
+
+		return pose,True
+
+	return pose,False
+
+def object_pose_world(pose_gazebo):
+
+	source_frame = "/stereo_left_camera"
+	target_frame = "/stereo_base"
+	time = rospy.Time()
 	
-	marker_points.ns = name
-	marker_points.id = 8
-	marker_points.type = marker_points.POINTS
-	marker_points.action = marker_points.ADD
-	
-	marker_points.pose.orientation.w = 1.0
-	
-	marker_points.scale.x = 0.05
-	marker_points.scale.y = 0.05
-	#marker_points.scale.z = 0.05
-	
-	marker_points.color.r = 1.0
-	marker_points.color.g = 1.0
-	marker_points.color.b = 0.0
-	marker_points.color.a = 1.0
+	t = tf.TransformListener()
+	t.waitForTransform(target_frame,source_frame,time,rospy.Duration(5))
+	camera_world_t, camera_world_r = t.lookupTransform(target_frame, source_frame, time)
+	#print("Translation w.r.t base")
+	#print(camera_world_t)
+	object_pose_world = np.matmul(t.fromTranslationRotation(camera_world_t, camera_world_r),pose_gazebo)
 
-	marker_points.points = stereo_points
-	#print("All points are transformed and published to visulaize in RVIZ")
-	pub_marker.publish(marker_points)
+	translation_vector = object_pose_world[:3,3]
 
-def visulaise_objects_markers_rviz(object_points,object_names):
+	rotation_matrix = np.zeros((4,4))
+	rotation_matrix[:3,:3] = object_pose_world[:3,:3]
+	rotation_matrix[3,3] = 1
+	rotation_vector = quaternion_from_matrix(rotation_matrix)
 
-	for points_3d,name in zip(object_points,object_names):
-		publish_marker(points_3d, name)
+	return translation_vector, rotation_vector
 
 
 def x_y_z_from_pcd(u,v):
@@ -151,7 +183,6 @@ def x_y_z_from_pcd(u,v):
 	return (X, Y, Z)
 
 
-	
 def contours_correspondence_3d(contours, objects):
 	
 	object_3d_points = []
@@ -166,17 +197,12 @@ def contours_correspondence_3d(contours, objects):
 		points_uv=[]
 		for point in contours[obj.get("contour")]:
 		 	u,v = point[0][0], point[0][1]
-			#print("U: {}  V: {}".format(u,v))
+			
 		 	x,y,z = x_y_z_from_pcd(u,v) #w.r.t opencv camera frame (z-axis out of the camera)
 		 	position_homogeneous = np.reshape(np.array([x,y,z,1]), (-1,1))
-		 	#transforming point from opencv_camera frame to stereo_frame (URDF) this is because 
-		 	# stereo_image_proc publishes the sparse point cloud data w.r.t opencv camera frame (z-axis out of the camera)
-		 	point_stereo_camera = np.matmul(tf_opencv_camera_stereo_camera,position_homogeneous)
-		 	print(point_stereo_camera[0:3])
-
+		 	
 		 	if not(math.isnan(x) or math.isnan(y) or math.isnan(z)):
-		 		#print("Checked for nan and appending")
-				points_xyz.append(point_stereo_camera[0:3])
+				points_xyz.append(position_homogeneous[0:3])
 				points_uv.append([u,v])
 		
 		object_3d_points.append(points_xyz)
@@ -253,15 +279,13 @@ def main():
 
 		object_points,image_points,object_names = contours_correspondence_3d(object_contours,objects)
 
-		print(len(object_points),len(image_points))
-
-		time.sleep(10)
+		#print(len(object_points),len(image_points))
 
 		if (len(object_points) == len(image_points)) and (len(object_points) > 0):
-
 			publish_object_pose_tf_rviz(object_points,image_points,object_names)
+		
 		else:
-			rospy.logwarn("No onjects detected")
+			rospy.logwarn("No objects detected")
 
 	
 	print("Shutting down")

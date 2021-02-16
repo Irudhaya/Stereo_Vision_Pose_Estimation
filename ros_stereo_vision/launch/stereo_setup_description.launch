@@ -1,9 +1,10 @@
 <launch>
-	<arg name="model" default="Stero_Setup"/>
+	<arg name="model" default="stereo_robot"/>
 	<arg name="pos_x" default="0.0"/>
 	<arg name="pos_y" default="0.0"/>
 	<arg name="pos_z" default="0.0"/>
 	<arg name="rviz_stereo_config" default="$(find ros_stereo_vision)/config/stereo_setup.rviz" doc="File for the rviz configuration"/>
+	<!--arg world="stereo_world" default="$(find ros_stereo_vision)/world/stereo_objects.world" doc="Gazebo world configuration"/-->
 
 	<!-- loading the robot desription in the parameter server-->
 	<param name="robot_description" command="cat $(find ros_stereo_vision)/urdf/Stero_Setup.urdf"/>
@@ -14,13 +15,18 @@
 		<param name="use_gui" value="false"/> <!-- deprecated and should use standalone package "joint_state_publisher_gui"-->
 	</node> 
 
-	<!-- launching an empty world-->
-	<include file="$(find gazebo_ros)/launch/empty_world.launch"/>
+	<!-- launching gazebo world-->
+	<include file="$(find gazebo_ros)/launch/empty_world.launch">
+		<arg name="world_name" default="$(find ros_stereo_vision)/world/stereo_objects.world"/>
+	</include>
 
 	<!-- spawning the robot model in gazebo from the urdf loaded in the parameter server-->
 	<node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf"  args="-urdf -model $(arg model) -x $(arg pos_x) -y $(arg pos_y) -z $(arg pos_z) -param robot_description" />
 	
 	<!-- launching the rviz to visulaize the frames of the robot-->
     <node name="rviz" pkg="rviz" type="rviz" respawn="false" args="-d $(arg rviz_stereo_config)" />
+
+    <!-- static transforms to enable the imaginary camera as per opencv-->
+    <!--<node pkg="tf" type="static_transform_publisher" name="left_camera_tf" args="0 0 0 -1.57 0.0 -1.57 stereo_left_camera left_camera_frame 100" />-->
 
 </launch>
