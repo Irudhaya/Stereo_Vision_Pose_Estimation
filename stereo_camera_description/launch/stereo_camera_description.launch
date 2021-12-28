@@ -1,0 +1,30 @@
+<launch>
+	<arg name="model" default="stereo_camera_setup"/>
+	<arg name="pos_x" default="0.0"/>
+	<arg name="pos_y" default="0.0"/>
+	<arg name="pos_z" default="0.0"/>
+	
+	<arg name="rviz_stereo_config" default="$(find stereo_camera_description)/config/stereo_setup.rviz" doc="File for the rviz configuration"/>
+	
+	<arg name="stereo_world" default="$(find stereo_camera_description)/world/objects_table.world" doc="Gazebo world configuration"/>
+	
+	<arg name="stereo_camera_urdf" default="$(find stereo_camera_description)/description/stereo_setup.urdf.xacro" doc=" Stereo camera setup description in URDF to define the frame positions"/>
+
+	<!-- loading the robot desription in the parameter server-->
+	<param name="robot_description" command="$(find xacro)/xacro --inorder '$(arg stereo_camera_urdf)'" />
+
+	<!-- launching the robot_publisher-->
+	<node name="robot_state_publisher" type="robot_state_publisher" pkg="robot_state_publisher"/>
+
+	<!-- launching gazebo world-->
+	<include file="$(find gazebo_ros)/launch/empty_world.launch">
+		<arg name="world_name" default="$(arg stereo_world)"/>
+	</include>
+
+	<!-- spawning the robot model in gazebo from the urdf loaded in the parameter server-->
+	<node pkg="gazebo_ros" type="spawn_model" name="spawn_urdf"  args="-urdf -model $(arg model) -x $(arg pos_x) -y $(arg pos_y) -z $(arg pos_z) -param robot_description" />
+	
+	<!-- launching the rviz to visulaize the frames of the robot-->
+    <node name="rviz" pkg="rviz" type="rviz" respawn="false" args="-d $(arg rviz_stereo_config)" />
+
+</launch>
