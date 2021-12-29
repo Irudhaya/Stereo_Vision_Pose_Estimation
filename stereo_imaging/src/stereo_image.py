@@ -267,7 +267,6 @@ def detect_objects_contours(left_image):
 
 	return (contours,area_centroid)
 
-#function that initates the subscription of topics
 def image_proc():
 	global pub_data
 
@@ -278,7 +277,7 @@ def image_proc():
 
 	pcd_3d = rospy.Subscriber("/stereo/points2",PointCloud2,point_cloud_object)
 
-	pub_data = rospy.Publisher("/object/data",ObjectData,queue_size=1)
+	#pub_data = rospy.Publisher("/object/data",ObjectData,queue_size=1)
 
 def main():
 	
