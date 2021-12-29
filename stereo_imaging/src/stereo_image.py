@@ -7,7 +7,7 @@ from sensor_msgs.msg import Image,CameraInfo,PointCloud2
 from geometry_msgs.msg import Point,Pose
 import numpy as np
 from visualization_msgs.msg import Marker
-from manipulation_msgs.msg import ObjectData
+#from manipulation_msgs.msg import ObjectData
 from tf.transformations import euler_matrix, euler_from_quaternion, quaternion_from_euler, quaternion_from_matrix
 import tf
 import math
@@ -302,7 +302,7 @@ def main():
 
 		if (len(object_points) == len(image_points)) and (len(object_points) > 0):
 			publish_object_pose_tf_rviz(object_points,image_points,object_names)
-			publish_object_data(object_names,height)
+			#publish_object_data(object_names,height)
 		
 		else:
 			rospy.logwarn("No objects detected")
