@@ -7,6 +7,10 @@ project(stereo_imaging)
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
+
+set(OpenCV_DIR /usr/share/OpenCV)
+
+
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   OpenCV

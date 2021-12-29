@@ -7,13 +7,14 @@ from sensor_msgs.msg import Image,CameraInfo,PointCloud2
 from geometry_msgs.msg import Point,Pose
 import numpy as np
 from visualization_msgs.msg import Marker
+from manipulation_msgs.msg import ObjectData
 from tf.transformations import euler_matrix, euler_from_quaternion, quaternion_from_euler, quaternion_from_matrix
 import tf
 import math
 import time
 import struct
 
-bridge_image = CvBridge()
+bridge_image = CvBridge() #instance to bridge the ros image to cv2 image
 
 def left_image_rect(image):
 	global left_image
@@ -61,10 +62,13 @@ def publish_object_pose_tf_rviz(object_points,image_points,frame_names):
 		
 		assert len(points3D)==len(points2D), "object points and image points should be of same length"
 		
+
 		#sample 21 points
 		if len(points3D) >=21:
 			sample_points_indexes = np.random.choice(len(points3D),21,replace=False)
 			points3D_sampled = np.array([points3D[i] for i in sample_points_indexes],dtype="float32")
+			
+			#setting the frame of the pose at the bottom of the object 
 			points3D_sampled_tf = np.array([points3D[i] - points3D[len(points3D)//2] for i in sample_points_indexes])
 			points2D_sampled = np.array([points2D[i] for i in sample_points_indexes],dtype="double")
 		else:
@@ -87,7 +91,7 @@ def compute_object_pose(object_points, image_points,object_name):
 	success,rotation,translation = cv2.solvePnP(object_points, image_points,
 		left_K, left_D, flags=cv2.SOLVEPNP_ITERATIVE)
 
-	#Model pose w.r.t opencv camera frame if available
+	#Transforming the Model pose from opencv camera frame to gazebo camera frame if available
 	if success:
 
 		euler_angle = rotation.reshape(-1)
@@ -98,7 +102,7 @@ def compute_object_pose(object_points, image_points,object_name):
 		tf_opencv_camera_stereo_camera = euler_matrix(-1.5707963,0.0,-1.5707963)
 		
 		#from opencv camera frame to the gazebo camera frame (because x-axis is out of the camera in gazebo 
-		#while z-axis in opencv camera)
+		#while z-axis is out in opencv camera)
 		pose_gazebo = np.matmul(tf_opencv_camera_stereo_camera,object_pose)
 
 		#pose of the object w.r.t global frame (location in world)
@@ -183,15 +187,23 @@ def x_y_z_from_pcd(u,v):
 	return (X, Y, Z)
 
 
+def publish_object_data(names,height):
+	obj = ObjectData()
+	obj.height = height
+	obj.name = names
+	pub_data.publish(obj)
+
+
 def contours_correspondence_3d(contours, objects):
 	
 	object_3d_points = []
 	object_names=[]
 	object_2d_points = []
-
-	#homogeneous transformation matrix for the camera w.r.t stereo frame in Arrangement(URDF)
+	height_object = []
+	#transformation matrix for the camera w.r.t stereo frame in Arrangement(URDF)
 	tf_opencv_camera_stereo_camera = euler_matrix(-1.5707963,0.0,-1.5707963)
 
+	#for each objects detected get the corresponding xyz coordinates related to pixel coordinates from the contour 
 	for obj in objects:
 		points_xyz=[]
 		points_uv=[]
@@ -205,18 +217,20 @@ def contours_correspondence_3d(contours, objects):
 				points_xyz.append(position_homogeneous[0:3])
 				points_uv.append([u,v])
 		
+		#height will be used mainly when grasping of an object is necessary
+		height_object.append(abs(np.max(np.array(points_xyz)[:,1,0]) - np.min(np.array(points_xyz)[:,1,0]))) #the value along y in opencv
+		
 		object_3d_points.append(points_xyz)
 		object_names.append(obj.get("name"))
 		object_2d_points.append(points_uv)
 
 
-	return (object_3d_points, object_2d_points, object_names)
+	return (object_3d_points, object_2d_points, object_names, height_object)
 
 
 def detect_objects_contours(left_image):
 
 	gray_left = cv2.cvtColor(left_image, cv2.COLOR_BGR2GRAY)
-
 
 	left_masked = cv2.adaptiveThreshold(gray_left,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,7,2)
 
@@ -233,11 +247,14 @@ def detect_objects_contours(left_image):
 			cx = cx = int(moments['m10']/moments['m00'])
 			cy = int(moments['m01']/moments['m00']) 
 			area = moments['m00']
-			#considering only the cube and cylinder objects in the scene (area is tuned)
-			if (area > 1400 and area < 1800):
-				area_centroid.append({"area":area,"cx":cx,"cy":cy,"contour":i,"name":"Cuboid"})
-			if (area > 4000 and area < 5000):
+			#considering only the cube and cylinder objects in the scene (area is hand tuned)
+			if (area > 950 and area < 1300):
+				#print(area)
 				area_centroid.append({"area":area,"cx":cx,"cy":cy,"contour":i,"name":"Cylinder"})
+			
+			if (area > 5000 and area < 6000):
+				#print("Cuboid")
+				area_centroid.append({"area":area,"cx":cx,"cy":cy,"contour":i,"name":"Cuboid"})
 
 	for cnt in area_centroid:
 
@@ -246,30 +263,32 @@ def detect_objects_contours(left_image):
 		cv2.drawContours(left_image, contours, cnt.get("contour"), (0,255,0), 3)
 		cv2.imshow("gray_left", left_masked)
 		cv2.imshow("gray_left_raw", left_image)
-		cv2.waitKey(3)
+		cv2.waitKey(1)
 
 	return (contours,area_centroid)
 
 #function that initates the subscription of topics
 def image_proc():
-	global pub_marker
+	global pub_data
 
 	left_cam = rospy.Subscriber("/stereo/left/camera_info", CameraInfo, callback=left_camera_properties)
 	right_cam = rospy.Subscriber("/stereo/right/camera_info", CameraInfo, callback=right_camera_properties)
-	left_image = rospy.Subscriber("/stereo/left/image_rect_color", Image, callback=left_image_rect)
+	left_image = rospy.Subscriber("/stereo/left/image_raw", Image, callback=left_image_rect)
 	right_image = rospy.Subscriber("/stereo/right/image_raw", Image, callback=right_image_raw)
 
 	pcd_3d = rospy.Subscriber("/stereo/points2",PointCloud2,point_cloud_object)
 
-	pub_marker = rospy.Publisher("/stereo/actual_pcd",Marker,queue_size=1)
+	pub_data = rospy.Publisher("/object/data",ObjectData,queue_size=1)
 
 def main():
 	
 	rospy.init_node("stereo_imaging")
 	print("Node Started")
 	image_proc()
-	time.sleep(5)
-	print("Checked for the subscription of topics")
+	print("Waiting for the RGB image....")
+	rospy.wait_for_message("/stereo/left/image_raw",Image)
+	print("RGB Image available....")
+	print("Waiting for the point cloud...")
 	rospy.wait_for_message("/stereo/points2",PointCloud2)
 	print("Point cloud received.....")
 
@@ -277,12 +296,13 @@ def main():
 
 		object_contours, objects = detect_objects_contours(left_image)
 
-		object_points,image_points,object_names = contours_correspondence_3d(object_contours,objects)
+		object_points,image_points,object_names,height = contours_correspondence_3d(object_contours,objects)
 
 		#print(len(object_points),len(image_points))
 
 		if (len(object_points) == len(image_points)) and (len(object_points) > 0):
 			publish_object_pose_tf_rviz(object_points,image_points,object_names)
+			publish_object_data(object_names,height)
 		
 		else:
 			rospy.logwarn("No objects detected")
