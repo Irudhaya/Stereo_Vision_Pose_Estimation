@@ -43,7 +43,7 @@ roslaunch stereo_imaging stereo_imaging_proc.launch
 ```sh
 roslaunch stereo_imaging stereo_imaging.launch
 ```
-The node provided by this package will display two images, Binary and RGB image. The node detects contour of the the objects in the RGB Image. Point cloud of the object is extracted from the pixel information corresponding to the detected contours and pose of the object is estimated with (ransac algorithm)[https://docs.opencv.org/4.x/d7/d53/tutorial_py_pose.html] on camera projection model.
+The node provided by this package will display two images, Binary and RGB image. The node detects contour of the the objects in the RGB Image. Point cloud of the object is extracted from the pixel information corresponding to the detected contours and pose of the object is estimated with [Ransac algorithm](https://docs.opencv.org/4.x/d7/d53/tutorial_py_pose.html) on camera projection model.
 
 ##### Binary Image
 ![binary_image](./docs/binary_image.png)
